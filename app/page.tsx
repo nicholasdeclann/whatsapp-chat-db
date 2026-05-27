@@ -81,6 +81,40 @@ function formatDateLabel(isoDate: string): string {
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const DAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
+/** Wraps matched substrings in a yellow highlight span. */
+function highlightText(node: React.ReactNode, query: string): React.ReactNode {
+  if (!query) return node;
+  if (typeof node === "string") {
+    const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi");
+    const parts = node.split(regex);
+    if (parts.length === 1) return node;
+    return (
+      <>
+        {parts.map((part, i) =>
+          regex.test(part)
+            ? <mark key={i} className="bg-yellow-400/80 text-black rounded-sm px-[1px]">{part}</mark>
+            : part
+        )}
+      </>
+    );
+  }
+  // For React elements, recurse into children
+  if (typeof node === "object" && node !== null && "props" in node) {
+    const el = node as React.ReactElement<{ children?: React.ReactNode }>;
+    if (el.props.children) {
+      const newChildren = Array.isArray(el.props.children)
+        ? el.props.children.map((c: React.ReactNode) => {
+            const highlighted = highlightText(c, query);
+            return highlighted;
+          })
+        : highlightText(el.props.children, query);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return { ...el, props: { ...el.props, children: newChildren } } as any;
+    }
+  }
+  return node;
+}
+
 // ---------------------------------------------------------------------------
 // Calendar Modal
 // ---------------------------------------------------------------------------
@@ -228,7 +262,7 @@ function ChatViewer({
   perspective,
   scrollToDate,
   scrollToMsgId,
-  highlightMsgId,
+  searchQuery,
   onScrollHandled,
 }: {
   messages: ChatMessage[];
@@ -236,7 +270,7 @@ function ChatViewer({
   perspective: string;
   scrollToDate: string | null;
   scrollToMsgId: number | null;
-  highlightMsgId: number | null;
+  searchQuery: string;
   onScrollHandled: () => void;
 }) {
   const [visibleEnd, setVisibleEnd] = useState(PAGE_SIZE);
@@ -349,9 +383,7 @@ function ChatViewer({
       <div
         key={msg.id}
         ref={(el) => { if (el) msgRefs.current.set(msg.id, el); }}
-        className={`flex ${isMe ? "justify-end" : "justify-start"} ${
-          highlightMsgId === msg.id ? "ring-2 ring-[#00a884] rounded-2xl" : ""
-        }`}
+        className={`flex ${isMe ? "justify-end" : "justify-start"}`}
       >
         <div className={`relative max-w-[75%] px-3 py-2 rounded-2xl text-sm shadow-md ${
           isMe ? "bg-[#005c4b] text-white rounded-br-sm" : "bg-[#1f2c34] text-white rounded-bl-sm"
@@ -368,7 +400,10 @@ function ChatViewer({
             </div>
           )}
           <p className="whitespace-pre-wrap leading-relaxed">
-            {renderTextWithLinks(msg.text, participants)}
+            {searchQuery
+              ? highlightText(renderTextWithLinks(msg.text, participants), searchQuery)
+              : renderTextWithLinks(msg.text, participants)
+            }
           </p>
           <p className="text-[#8696a0] text-[10px] text-right mt-1 -mb-0.5">{msg.timestamp}</p>
         </div>
@@ -440,8 +475,9 @@ export default function Home() {
     const q = query.toLowerCase();
     const results = messages.filter((m) => m.text.toLowerCase().includes(q)).map((m) => m.id);
     setSearchResults(results);
-    setSearchIndex(0);
-    if (results.length > 0) setScrollToMsgId(results[0]);
+    const lastIdx = results.length - 1;
+    setSearchIndex(Math.max(0, lastIdx));
+    if (results.length > 0) setScrollToMsgId(results[lastIdx]);
   };
   const searchPrev = () => {
     if (searchResults.length === 0) return;
@@ -660,7 +696,7 @@ export default function Home() {
           perspective={perspective}
           scrollToDate={scrollToDate}
           scrollToMsgId={scrollToMsgId}
-          highlightMsgId={searchResults.length > 0 ? searchResults[searchIndex] : null}
+          searchQuery={searchQuery}
           onScrollHandled={handleScrollHandled}
         />
       )}
