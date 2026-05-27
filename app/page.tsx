@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { parseWhatsAppChat, ChatMessage } from "./lib/parseChat";
-import { SHEET_URL, CHAT_NAME, NAME_OVERRIDES } from "./lib/config";
+import { SHEETS, CHAT_NAME, NAME_OVERRIDES } from "./lib/config";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -202,40 +202,47 @@ export default function Home() {
   const [perspective, setPerspective] = useState("");
 
   useEffect(() => {
-    if (SHEET_URL.includes("YOUR_SPREADSHEET_ID")) {
-      setErrorMsg("No sheet URL configured. Set NEXT_PUBLIC_SHEET_URL or update app/lib/config.ts.");
-      setLoadState("error");
-      return;
-    }
-
     setLoadState("loading");
 
-    // Use a CORS proxy approach: Google Sheets published CSV supports direct fetch
-    fetch(SHEET_URL)
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.text();
-      })
-      .then((csv) => {
-        // Each row in column A is one raw WhatsApp line; CSV may wrap values in quotes
-        const lines = csv
-          .split("\n")
-          .map((row) => {
-            // Strip leading/trailing quote added by CSV serialisation for single-column sheets
-            const trimmed = row.trim();
-            if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
-              return trimmed.slice(1, -1).replace(/""/g, '"');
-            }
-            return trimmed;
-          })
-          .filter(Boolean);
+    const parseCSV = (csv: string) =>
+      csv
+        .split("\n")
+        .map((row) => {
+          const trimmed = row.trim();
+          if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+            return trimmed.slice(1, -1).replace(/""/g, '"');
+          }
+          return trimmed;
+        })
+        .filter(Boolean)
+        .join("\n");
 
-        const rawText = lines.join("\n");
-        const { messages: msgs, participants: parts } = parseWhatsAppChat(rawText);
+    Promise.all(
+      SHEETS.map((sheet) =>
+        fetch(sheet.url)
+          .then((res) => {
+            if (!res.ok) throw new Error(`Failed to load ${sheet.label}: HTTP ${res.status}`);
+            return res.text();
+          })
+          .then(parseCSV)
+      )
+    )
+      .then((csvTexts) => {
+        const combined = csvTexts.join("\n");
+        const { messages: msgs, participants: parts } = parseWhatsAppChat(combined);
 
         if (msgs.length === 0) {
-          throw new Error("No messages parsed. Check that the sheet has raw WhatsApp lines in column A.");
+          throw new Error("No messages parsed. Check that the sheets have raw WhatsApp lines in column A.");
         }
+
+        // Sort all messages chronologically across sheets
+        msgs.sort((a, b) => {
+          if (a.date !== b.date) return a.date.localeCompare(b.date);
+          return a.timestamp.localeCompare(b.timestamp);
+        });
+
+        // Re-assign sequential ids after sort
+        msgs.forEach((m, i) => { m.id = i + 1; });
 
         // Apply display name overrides
         const rename = (name: string) => NAME_OVERRIDES[name] ?? name;
@@ -303,7 +310,7 @@ export default function Home() {
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
           </svg>
-          <p className="text-[#8696a0] text-sm">Loading messages…</p>
+          <p className="text-[#8696a0] text-sm">Loading {SHEETS.length} year{SHEETS.length !== 1 ? "s" : ""} of messages…</p>
         </div>
       )}
 

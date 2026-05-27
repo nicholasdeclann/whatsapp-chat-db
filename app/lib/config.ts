@@ -1,20 +1,25 @@
 /**
- * Google Sheet published CSV URL.
- * Set NEXT_PUBLIC_SHEET_URL at build time, or replace the fallback with your URL.
+ * Google Sheets data source config.
  *
- * How to get the URL:
- *   Google Sheets → File → Share → Publish to web
- *   → select the tab → CSV format → Copy link
- *
- * Format:
- *   https://docs.google.com/spreadsheets/d/{ID}/pub?gid={GID}&single=true&output=csv
+ * HOW TO ADD A NEW YEAR SHEET:
+ *   1. Create a new sheet tab in the spreadsheet (e.g. "2021")
+ *   2. Open it in the browser — the URL will end with #gid=XXXXXXXXX
+ *   3. Copy that gid number
+ *   4. Add a new entry to SHEETS below:
+ *      { label: "2021", url: `${BASE}&gid=XXXXXXXXX` }
+ *   5. Commit and push — GitHub Actions will redeploy automatically
  */
-export const SHEET_URL =
-  process.env.NEXT_PUBLIC_SHEET_URL ??
-  "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/pub?gid=0&single=true&output=csv";
+
+const BASE =
+  "https://docs.google.com/spreadsheets/d/e/2PACX-1vTZvWm_5wh8yILpvbu0oN8oevvHLjLYO6z6V9LMK_yPSPIt5BV6E2Zik92AkxpCVyUsUueBIHRXsbtf/pub?output=csv";
+
+export const SHEETS: { label: string; url: string }[] = [
+  { label: "2019", url: `${BASE}&gid=0` },
+  { label: "2020", url: `${BASE}&gid=1522915668` },
+];
 
 /** Name shown in the header bar */
-export const CHAT_NAME = process.env.NEXT_PUBLIC_CHAT_NAME ?? "WhatsApp Chat";
+export const CHAT_NAME = "Peyaa & Pikachu";
 
 /**
  * Display name overrides — maps the raw sender name from the WhatsApp export
