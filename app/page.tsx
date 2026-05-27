@@ -145,12 +145,18 @@ function ChatViewer({
       );
     }
     const isMe = msg.sender === perspective;
+    const prevMsg = visible[visible.indexOf(msg) - 1];
+    const showSender = !isMe && (
+      !prevMsg || prevMsg.sender !== msg.sender || prevMsg.date !== msg.date
+        ? true
+        : false
+    );
     items.push(
       <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
         <div className={`relative max-w-[75%] px-3 py-2 rounded-2xl text-sm shadow-md ${
           isMe ? "bg-[#005c4b] text-white rounded-br-sm" : "bg-[#1f2c34] text-white rounded-bl-sm"
         }`}>
-          {!isMe && (
+          {showSender && (
             <p className="text-[#00a884] font-semibold text-xs mb-1">{msg.sender}</p>
           )}
           {msg.replyTo && (
