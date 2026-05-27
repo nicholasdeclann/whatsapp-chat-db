@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parseWhatsAppChat, ChatMessage } from "./lib/parseChat";
 import { SHEETS, CHAT_NAME, NAME_OVERRIDES } from "./lib/config";
 
@@ -78,6 +78,144 @@ function formatDateLabel(isoDate: string): string {
   });
 }
 
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const DAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+
+// ---------------------------------------------------------------------------
+// Calendar Modal
+// ---------------------------------------------------------------------------
+
+function CalendarModal({
+  open,
+  onClose,
+  datesWithChats,
+  onSelectDate,
+}: {
+  open: boolean;
+  onClose: () => void;
+  datesWithChats: Set<string>;
+  onSelectDate: (date: string) => void;
+}) {
+  // Determine year range from available dates
+  const years = useMemo(() => {
+    const yrs = new Set<number>();
+    datesWithChats.forEach((d) => yrs.add(parseInt(d.slice(0, 4), 10)));
+    return [...yrs].sort();
+  }, [datesWithChats]);
+
+  const [viewYear, setViewYear] = useState(() => years[years.length - 1] ?? new Date().getFullYear());
+  const [viewMonth, setViewMonth] = useState(() => new Date().getMonth());
+
+  if (!open) return null;
+
+  const pad = (n: number) => String(n).padStart(2, "0");
+
+  // Days in this month
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const firstDayOfWeek = new Date(viewYear, viewMonth, 1).getDay(); // 0=Sun
+
+  const goToPrevMonth = () => {
+    if (viewMonth === 0) { setViewMonth(11); setViewYear(viewYear - 1); }
+    else setViewMonth(viewMonth - 1);
+  };
+  const goToNextMonth = () => {
+    if (viewMonth === 11) { setViewMonth(0); setViewYear(viewYear + 1); }
+    else setViewMonth(viewMonth + 1);
+  };
+
+  const cells: React.ReactNode[] = [];
+  // Empty cells for offset
+  for (let i = 0; i < firstDayOfWeek; i++) {
+    cells.push(<div key={`e-${i}`} />);
+  }
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateStr = `${viewYear}-${pad(viewMonth + 1)}-${pad(day)}`;
+    const hasChat = datesWithChats.has(dateStr);
+    cells.push(
+      <button
+        key={day}
+        disabled={!hasChat}
+        onClick={() => { onSelectDate(dateStr); onClose(); }}
+        className={`w-8 h-8 rounded-full text-xs font-medium transition-colors ${
+          hasChat
+            ? "text-white bg-[#00a884] hover:bg-[#02b698] cursor-pointer"
+            : "text-[#3b4a54] cursor-default"
+        }`}
+      >
+        {day}
+      </button>
+    );
+  }
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div className="fixed inset-0 bg-black/60 z-40" onClick={onClose} />
+      {/* Modal */}
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="bg-[#1f2c34] rounded-2xl shadow-xl w-full max-w-sm p-4" onClick={(e) => e.stopPropagation()}>
+          {/* Year selector */}
+          <div className="flex items-center justify-center gap-2 mb-3">
+            <button onClick={() => setViewYear(viewYear - 1)} className="text-[#8696a0] hover:text-white px-2 py-1 text-sm">
+              &laquo;
+            </button>
+            {years.map((y) => (
+              <button
+                key={y}
+                onClick={() => setViewYear(y)}
+                className={`px-2 py-1 rounded-lg text-xs font-medium transition-colors ${
+                  y === viewYear ? "bg-[#00a884] text-white" : "text-[#8696a0] hover:text-white"
+                }`}
+              >
+                {y}
+              </button>
+            ))}
+            <button onClick={() => setViewYear(viewYear + 1)} className="text-[#8696a0] hover:text-white px-2 py-1 text-sm">
+              &raquo;
+            </button>
+          </div>
+
+          {/* Month navigation */}
+          <div className="flex items-center justify-between mb-3">
+            <button onClick={goToPrevMonth} className="text-[#8696a0] hover:text-white p-1">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <span className="text-white text-sm font-semibold">
+              {MONTH_NAMES[viewMonth]} {viewYear}
+            </span>
+            <button onClick={goToNextMonth} className="text-[#8696a0] hover:text-white p-1">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Day labels */}
+          <div className="grid grid-cols-7 gap-1 mb-1">
+            {DAY_LABELS.map((d) => (
+              <div key={d} className="text-center text-[#8696a0] text-[10px] font-medium">{d}</div>
+            ))}
+          </div>
+
+          {/* Day grid */}
+          <div className="grid grid-cols-7 gap-1 place-items-center">
+            {cells}
+          </div>
+
+          {/* Close */}
+          <div className="mt-4 flex justify-end">
+            <button onClick={onClose} className="text-[#8696a0] hover:text-white text-xs px-3 py-1.5 rounded-lg transition-colors">
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // ChatViewer with windowed rendering for large chats
 // ---------------------------------------------------------------------------
@@ -88,14 +226,19 @@ function ChatViewer({
   messages,
   participants,
   perspective,
+  scrollToDate,
+  onScrollHandled,
 }: {
   messages: ChatMessage[];
   participants: string[];
   perspective: string;
+  scrollToDate: string | null;
+  onScrollHandled: () => void;
 }) {
   const [visibleEnd, setVisibleEnd] = useState(PAGE_SIZE);
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const dateRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   // Auto-scroll to bottom on initial load
   useEffect(() => {
@@ -106,14 +249,36 @@ function ChatViewer({
     bottomRef.current?.scrollIntoView({ behavior: "auto" });
   }, []);
 
+  // Scroll to a specific date when requested
+  useEffect(() => {
+    if (!scrollToDate) return;
+
+    // Find the first message index on or after this date
+    const idx = messages.findIndex((m) => m.date >= scrollToDate);
+    if (idx === -1) { onScrollHandled(); return; }
+
+    // Ensure enough messages are loaded to include this date
+    const needed = messages.length - idx;
+    if (needed > visibleEnd) {
+      setVisibleEnd(Math.min(messages.length, needed + PAGE_SIZE));
+    }
+
+    // After render, scroll to the date separator
+    requestAnimationFrame(() => {
+      const el = dateRefs.current.get(scrollToDate);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+      onScrollHandled();
+    });
+  }, [scrollToDate, messages, visibleEnd, onScrollHandled]);
+
   const handleScroll = () => {
     const el = containerRef.current;
     if (!el) return;
-    // Load more when scrolled near top
     if (el.scrollTop < 200 && visibleEnd < messages.length) {
       const prevScrollHeight = el.scrollHeight;
       setVisibleEnd((v) => Math.min(v + PAGE_SIZE, messages.length));
-      // Restore scroll position after render
       requestAnimationFrame(() => {
         el.scrollTop += el.scrollHeight - prevScrollHeight;
       });
@@ -133,11 +298,16 @@ function ChatViewer({
     );
   }
 
-  for (const msg of visible) {
+  for (let i = 0; i < visible.length; i++) {
+    const msg = visible[i];
     if (msg.date !== lastDate) {
       lastDate = msg.date;
       items.push(
-        <div key={`sep-${msg.date}-${msg.id}`} className="flex justify-center my-2">
+        <div
+          key={`sep-${msg.date}-${msg.id}`}
+          ref={(el) => { if (el) dateRefs.current.set(msg.date, el); }}
+          className="flex justify-center my-2"
+        >
           <span className="bg-[#1f2c34] text-[#8696a0] text-xs px-3 py-1 rounded-full shadow">
             {formatDateLabel(msg.date)}
           </span>
@@ -145,11 +315,9 @@ function ChatViewer({
       );
     }
     const isMe = msg.sender === perspective;
-    const prevMsg = visible[visible.indexOf(msg) - 1];
+    const prevMsg = i > 0 ? visible[i - 1] : undefined;
     const showSender = !isMe && (
       !prevMsg || prevMsg.sender !== msg.sender || prevMsg.date !== msg.date
-        ? true
-        : false
     );
     items.push(
       <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
@@ -200,6 +368,16 @@ export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [participants, setParticipants] = useState<string[]>([]);
   const [perspective, setPerspective] = useState("");
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [scrollToDate, setScrollToDate] = useState<string | null>(null);
+
+  // Derive set of dates that have chats
+  const datesWithChats = useMemo(
+    () => new Set(messages.map((m) => m.date)),
+    [messages]
+  );
+
+  const handleScrollHandled = useCallback(() => setScrollToDate(null), []);
 
   useEffect(() => {
     setLoadState("loading");
@@ -235,16 +413,12 @@ export default function Home() {
           throw new Error("No messages parsed. Check that the sheets have raw WhatsApp lines in column A.");
         }
 
-        // Sort all messages chronologically across sheets
         msgs.sort((a, b) => {
           if (a.date !== b.date) return a.date.localeCompare(b.date);
           return a.timestamp.localeCompare(b.timestamp);
         });
-
-        // Re-assign sequential ids after sort
         msgs.forEach((m, i) => { m.id = i + 1; });
 
-        // Apply display name overrides
         const rename = (name: string) => NAME_OVERRIDES[name] ?? name;
         for (const msg of msgs) {
           msg.sender = rename(msg.sender);
@@ -281,21 +455,46 @@ export default function Home() {
           </div>
         </div>
 
-        {loadState === "done" && participants.length > 0 && (
-          <div className="flex flex-col items-end gap-0.5">
-            <label className="text-[#8696a0] text-[10px]">Your perspective</label>
-            <select
-              className="bg-[#2a3942] text-white text-xs rounded-lg px-2 py-1 border border-[#3b4a54] outline-none"
-              value={perspective}
-              onChange={(e) => setPerspective(e.target.value)}
+        <div className="flex items-center gap-3">
+          {/* Calendar button */}
+          {loadState === "done" && (
+            <button
+              onClick={() => setCalendarOpen(true)}
+              title="Jump to date"
+              className="text-[#8696a0] hover:text-white transition-colors"
             >
-              {participants.map((p) => (
-                <option key={p} value={p}>{p}</option>
-              ))}
-            </select>
-          </div>
-        )}
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </button>
+          )}
+
+          {/* Perspective selector */}
+          {loadState === "done" && participants.length > 0 && (
+            <div className="flex flex-col items-end gap-0.5">
+              <label className="text-[#8696a0] text-[10px]">Your perspective</label>
+              <select
+                className="bg-[#2a3942] text-white text-xs rounded-lg px-2 py-1 border border-[#3b4a54] outline-none"
+                value={perspective}
+                onChange={(e) => setPerspective(e.target.value)}
+              >
+                {participants.map((p) => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
       </header>
+
+      {/* Calendar Modal */}
+      <CalendarModal
+        open={calendarOpen}
+        onClose={() => setCalendarOpen(false)}
+        datesWithChats={datesWithChats}
+        onSelectDate={setScrollToDate}
+      />
 
       {/* Body */}
       {loadState === "idle" && (
@@ -330,6 +529,8 @@ export default function Home() {
           messages={messages}
           participants={participants}
           perspective={perspective}
+          scrollToDate={scrollToDate}
+          onScrollHandled={handleScrollHandled}
         />
       )}
     </div>
