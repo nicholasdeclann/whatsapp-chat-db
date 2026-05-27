@@ -227,18 +227,23 @@ function ChatViewer({
   participants,
   perspective,
   scrollToDate,
+  scrollToMsgId,
+  highlightMsgId,
   onScrollHandled,
 }: {
   messages: ChatMessage[];
   participants: string[];
   perspective: string;
   scrollToDate: string | null;
+  scrollToMsgId: number | null;
+  highlightMsgId: number | null;
   onScrollHandled: () => void;
 }) {
   const [visibleEnd, setVisibleEnd] = useState(PAGE_SIZE);
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const dateRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const msgRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
   // Auto-scroll to bottom on initial load
   useEffect(() => {
@@ -272,6 +277,27 @@ function ChatViewer({
       onScrollHandled();
     });
   }, [scrollToDate, messages, visibleEnd, onScrollHandled]);
+
+  // Scroll to a specific message by id
+  useEffect(() => {
+    if (!scrollToMsgId) return;
+
+    const idx = messages.findIndex((m) => m.id === scrollToMsgId);
+    if (idx === -1) { onScrollHandled(); return; }
+
+    const needed = messages.length - idx;
+    if (needed > visibleEnd) {
+      setVisibleEnd(Math.min(messages.length, needed + PAGE_SIZE));
+    }
+
+    requestAnimationFrame(() => {
+      const el = msgRefs.current.get(scrollToMsgId);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+      onScrollHandled();
+    });
+  }, [scrollToMsgId, messages, visibleEnd, onScrollHandled]);
 
   const handleScroll = () => {
     const el = containerRef.current;
@@ -320,7 +346,13 @@ function ChatViewer({
       !prevMsg || prevMsg.sender !== msg.sender || prevMsg.date !== msg.date
     );
     items.push(
-      <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
+      <div
+        key={msg.id}
+        ref={(el) => { if (el) msgRefs.current.set(msg.id, el); }}
+        className={`flex ${isMe ? "justify-end" : "justify-start"} ${
+          highlightMsgId === msg.id ? "ring-2 ring-[#00a884] rounded-2xl" : ""
+        }`}
+      >
         <div className={`relative max-w-[75%] px-3 py-2 rounded-2xl text-sm shadow-md ${
           isMe ? "bg-[#005c4b] text-white rounded-br-sm" : "bg-[#1f2c34] text-white rounded-bl-sm"
         }`}>
@@ -370,6 +402,15 @@ export default function Home() {
   const [perspective, setPerspective] = useState("");
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [scrollToDate, setScrollToDate] = useState<string | null>(null);
+  const [scrollToMsgId, setScrollToMsgId] = useState<number | null>(null);
+
+  // Search state
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<number[]>([]); // message ids
+  const [searchIndex, setSearchIndex] = useState(0);
+
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Derive set of dates that have chats
   const datesWithChats = useMemo(
@@ -377,7 +418,43 @@ export default function Home() {
     [messages]
   );
 
-  const handleScrollHandled = useCallback(() => setScrollToDate(null), []);
+  const handleScrollHandled = useCallback(() => {
+    setScrollToDate(null);
+    setScrollToMsgId(null);
+  }, []);
+
+  // Search handlers
+  const openSearch = () => {
+    setSearchOpen(true);
+    setTimeout(() => searchInputRef.current?.focus(), 50);
+  };
+  const closeSearch = () => {
+    setSearchOpen(false);
+    setSearchQuery("");
+    setSearchResults([]);
+    setSearchIndex(0);
+  };
+  const doSearch = (query: string) => {
+    setSearchQuery(query);
+    if (!query.trim()) { setSearchResults([]); setSearchIndex(0); return; }
+    const q = query.toLowerCase();
+    const results = messages.filter((m) => m.text.toLowerCase().includes(q)).map((m) => m.id);
+    setSearchResults(results);
+    setSearchIndex(0);
+    if (results.length > 0) setScrollToMsgId(results[0]);
+  };
+  const searchPrev = () => {
+    if (searchResults.length === 0) return;
+    const newIdx = searchIndex > 0 ? searchIndex - 1 : searchResults.length - 1;
+    setSearchIndex(newIdx);
+    setScrollToMsgId(searchResults[newIdx]);
+  };
+  const searchNext = () => {
+    if (searchResults.length === 0) return;
+    const newIdx = searchIndex < searchResults.length - 1 ? searchIndex + 1 : 0;
+    setSearchIndex(newIdx);
+    setScrollToMsgId(searchResults[newIdx]);
+  };
 
   useEffect(() => {
     setLoadState("loading");
@@ -440,52 +517,104 @@ export default function Home() {
   return (
     <div className="flex flex-col h-screen bg-[#111b21] overflow-hidden">
       {/* Header */}
-      <header className="flex items-center justify-between px-4 py-3 bg-[#1f2c34] border-b border-[#2a3942] shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-[#00a884] flex items-center justify-center text-white font-semibold text-sm uppercase shrink-0">
-            {CHAT_NAME.charAt(0)}
-          </div>
-          <div>
-            <p className="text-white text-sm font-semibold leading-tight">{CHAT_NAME}</p>
-            {loadState === "done" && (
-              <p className="text-[#8696a0] text-xs">
-                {messages.length.toLocaleString()} messages
-              </p>
-            )}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {/* Calendar button */}
-          {loadState === "done" && (
-            <button
-              onClick={() => setCalendarOpen(true)}
-              title="Jump to date"
-              className="text-[#8696a0] hover:text-white transition-colors"
-            >
+      <header className="flex items-center justify-between px-4 py-3 bg-[#1f2c34] border-b border-[#2a3942] shrink-0 min-h-[56px]">
+        {searchOpen ? (
+          /* Search bar mode */
+          <div className="flex items-center gap-2 w-full">
+            <button onClick={closeSearch} className="text-[#8696a0] hover:text-white shrink-0">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </button>
-          )}
-
-          {/* Perspective selector */}
-          {loadState === "done" && participants.length > 0 && (
-            <div className="flex flex-col items-end gap-0.5">
-              <label className="text-[#8696a0] text-[10px]">Your perspective</label>
-              <select
-                className="bg-[#2a3942] text-white text-xs rounded-lg px-2 py-1 border border-[#3b4a54] outline-none"
-                value={perspective}
-                onChange={(e) => setPerspective(e.target.value)}
-              >
-                {participants.map((p) => (
-                  <option key={p} value={p}>{p}</option>
-                ))}
-              </select>
+            <input
+              ref={searchInputRef}
+              type="text"
+              placeholder="Search messages…"
+              value={searchQuery}
+              onChange={(e) => doSearch(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") searchNext(); if (e.key === "Escape") closeSearch(); }}
+              className="flex-1 bg-[#2a3942] text-white text-sm rounded-lg px-3 py-1.5 border border-[#3b4a54] outline-none placeholder-[#8696a0] focus:border-[#00a884] transition-colors"
+            />
+            {searchResults.length > 0 && (
+              <span className="text-[#8696a0] text-xs shrink-0">
+                {searchIndex + 1}/{searchResults.length}
+              </span>
+            )}
+            <button onClick={searchPrev} disabled={searchResults.length === 0} className="text-[#8696a0] hover:text-white disabled:opacity-30 shrink-0">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+              </svg>
+            </button>
+            <button onClick={searchNext} disabled={searchResults.length === 0} className="text-[#8696a0] hover:text-white disabled:opacity-30 shrink-0">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+          </div>
+        ) : (
+          /* Normal header mode */
+          <>
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-[#00a884] flex items-center justify-center text-white font-semibold text-sm uppercase shrink-0">
+                {CHAT_NAME.charAt(0)}
+              </div>
+              <div>
+                <p className="text-white text-sm font-semibold leading-tight">{CHAT_NAME}</p>
+                {loadState === "done" && (
+                  <p className="text-[#8696a0] text-xs">
+                    {messages.length.toLocaleString()} messages
+                  </p>
+                )}
+              </div>
             </div>
-          )}
-        </div>
+
+            <div className="flex items-center gap-3">
+              {/* Search button */}
+              {loadState === "done" && (
+                <button
+                  onClick={openSearch}
+                  title="Search messages"
+                  className="text-[#8696a0] hover:text-white transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </button>
+              )}
+
+              {/* Calendar button */}
+              {loadState === "done" && (
+                <button
+                  onClick={() => setCalendarOpen(true)}
+                  title="Jump to date"
+                  className="text-[#8696a0] hover:text-white transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </button>
+              )}
+
+              {/* Perspective selector */}
+              {loadState === "done" && participants.length > 0 && (
+                <div className="flex flex-col items-end gap-0.5">
+                  <label className="text-[#8696a0] text-[10px]">Your perspective</label>
+                  <select
+                    className="bg-[#2a3942] text-white text-xs rounded-lg px-2 py-1 border border-[#3b4a54] outline-none"
+                    value={perspective}
+                    onChange={(e) => setPerspective(e.target.value)}
+                  >
+                    {participants.map((p) => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </header>
 
       {/* Calendar Modal */}
@@ -530,6 +659,8 @@ export default function Home() {
           participants={participants}
           perspective={perspective}
           scrollToDate={scrollToDate}
+          scrollToMsgId={scrollToMsgId}
+          highlightMsgId={searchResults.length > 0 ? searchResults[searchIndex] : null}
           onScrollHandled={handleScrollHandled}
         />
       )}
