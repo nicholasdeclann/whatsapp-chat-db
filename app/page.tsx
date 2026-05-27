@@ -81,40 +81,6 @@ function formatDateLabel(isoDate: string): string {
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const DAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
-/** Wraps matched substrings in a yellow highlight span. */
-function highlightText(node: React.ReactNode, query: string): React.ReactNode {
-  if (!query) return node;
-  if (typeof node === "string") {
-    const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi");
-    const parts = node.split(regex);
-    if (parts.length === 1) return node;
-    return (
-      <>
-        {parts.map((part, i) =>
-          regex.test(part)
-            ? <mark key={i} className="bg-yellow-400/80 text-black rounded-sm px-[1px]">{part}</mark>
-            : part
-        )}
-      </>
-    );
-  }
-  // For React elements, recurse into children
-  if (typeof node === "object" && node !== null && "props" in node) {
-    const el = node as React.ReactElement<{ children?: React.ReactNode }>;
-    if (el.props.children) {
-      const newChildren = Array.isArray(el.props.children)
-        ? el.props.children.map((c: React.ReactNode) => {
-            const highlighted = highlightText(c, query);
-            return highlighted;
-          })
-        : highlightText(el.props.children, query);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return { ...el, props: { ...el.props, children: newChildren } } as any;
-    }
-  }
-  return node;
-}
-
 // ---------------------------------------------------------------------------
 // Calendar Modal
 // ---------------------------------------------------------------------------
@@ -262,7 +228,7 @@ function ChatViewer({
   perspective,
   scrollToDate,
   scrollToMsgId,
-  searchQuery,
+  highlightMsgIds,
   onScrollHandled,
 }: {
   messages: ChatMessage[];
@@ -270,7 +236,7 @@ function ChatViewer({
   perspective: string;
   scrollToDate: string | null;
   scrollToMsgId: number | null;
-  searchQuery: string;
+  highlightMsgIds: Set<number>;
   onScrollHandled: () => void;
 }) {
   const [visibleEnd, setVisibleEnd] = useState(PAGE_SIZE);
@@ -379,6 +345,7 @@ function ChatViewer({
     const showSender = !isMe && (
       !prevMsg || prevMsg.sender !== msg.sender || prevMsg.date !== msg.date
     );
+    const isHighlighted = highlightMsgIds.has(msg.id);
     items.push(
       <div
         key={msg.id}
@@ -386,7 +353,9 @@ function ChatViewer({
         className={`flex ${isMe ? "justify-end" : "justify-start"}`}
       >
         <div className={`relative max-w-[75%] px-3 py-2 rounded-2xl text-sm shadow-md ${
-          isMe ? "bg-[#005c4b] text-white rounded-br-sm" : "bg-[#1f2c34] text-white rounded-bl-sm"
+          isHighlighted
+            ? "bg-[#5e4b00] text-white rounded-br-sm rounded-bl-sm"
+            : isMe ? "bg-[#005c4b] text-white rounded-br-sm" : "bg-[#1f2c34] text-white rounded-bl-sm"
         }`}>
           {showSender && (
             <p className="text-[#00a884] font-semibold text-xs mb-1">{msg.sender}</p>
@@ -400,10 +369,7 @@ function ChatViewer({
             </div>
           )}
           <p className="whitespace-pre-wrap leading-relaxed">
-            {searchQuery
-              ? highlightText(renderTextWithLinks(msg.text, participants), searchQuery)
-              : renderTextWithLinks(msg.text, participants)
-            }
+            {renderTextWithLinks(msg.text, participants)}
           </p>
           <p className="text-[#8696a0] text-[10px] text-right mt-1 -mb-0.5">{msg.timestamp}</p>
         </div>
@@ -553,7 +519,7 @@ export default function Home() {
   return (
     <div className="flex flex-col h-screen bg-[#111b21] overflow-hidden">
       {/* Header */}
-      <header className="flex items-center justify-between px-4 py-3 bg-[#1f2c34] border-b border-[#2a3942] shrink-0 min-h-[56px]">
+      <header className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 bg-[#1f2c34] border-b border-[#2a3942] shrink-0 min-h-[56px]">
         {searchOpen ? (
           /* Search bar mode */
           <div className="flex items-center gap-2 w-full">
@@ -696,7 +662,7 @@ export default function Home() {
           perspective={perspective}
           scrollToDate={scrollToDate}
           scrollToMsgId={scrollToMsgId}
-          searchQuery={searchQuery}
+          highlightMsgIds={new Set(searchResults)}
           onScrollHandled={handleScrollHandled}
         />
       )}
