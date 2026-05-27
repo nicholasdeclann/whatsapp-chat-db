@@ -15,3 +15,12 @@ export const SHEET_URL =
 
 /** Name shown in the header bar */
 export const CHAT_NAME = process.env.NEXT_PUBLIC_CHAT_NAME ?? "WhatsApp Chat";
+
+/**
+ * Display name overrides — maps the raw sender name from the WhatsApp export
+ * to a display name shown in the UI.
+ */
+export const NAME_OVERRIDES: Record<string, string> = {
+  "Nicholas Declan": "Peyaa 💜",
+  "Vica 💙": "Pikachu 💙",
+};

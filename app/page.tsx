@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { parseWhatsAppChat, ChatMessage } from "./lib/parseChat";
-import { SHEET_URL, CHAT_NAME } from "./lib/config";
+import { SHEET_URL, CHAT_NAME, NAME_OVERRIDES } from "./lib/config";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -231,9 +231,17 @@ export default function Home() {
           throw new Error("No messages parsed. Check that the sheet has raw WhatsApp lines in column A.");
         }
 
+        // Apply display name overrides
+        const rename = (name: string) => NAME_OVERRIDES[name] ?? name;
+        for (const msg of msgs) {
+          msg.sender = rename(msg.sender);
+          if (msg.replyTo) msg.replyTo.sender = rename(msg.replyTo.sender);
+        }
+        const renamedParts = parts.map(rename);
+
         setMessages(msgs);
-        setParticipants(parts);
-        setPerspective(parts[0] ?? "");
+        setParticipants(renamedParts);
+        setPerspective(renamedParts[0] ?? "");
         setLoadState("done");
       })
       .catch((err: Error) => {
