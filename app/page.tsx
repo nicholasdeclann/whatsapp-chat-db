@@ -315,29 +315,11 @@ function ChatViewer({
     // Show/hide scroll-to-bottom button
     const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     setShowScrollDown(distFromBottom > 300);
-    // Track scrolling state
-    setIsScrolling(true);
-    if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
-    scrollTimeoutRef.current = setTimeout(() => setIsScrolling(false), 1500);
   };
 
-  const [currentDate, setCurrentDate] = useState("");
   const [showScrollDown, setShowScrollDown] = useState(false);
-  const [isScrolling, setIsScrolling] = useState(false);
-  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const updateCurrentDate = () => {
-    const el = containerRef.current;
-    if (!el) return;
-    const scrollTop = el.scrollTop + 60;
-    let found = "";
-    dateRefs.current.forEach((ref, date) => {
-      if (ref.offsetTop <= scrollTop) {
-        found = date;
-      }
-    });
-    if (found && found !== currentDate) setCurrentDate(found);
-  };
+  const updateCurrentDate = () => {};
 
   const scrollToBottom = () => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -364,9 +346,9 @@ function ChatViewer({
         <div
           key={`sep-${msg.date}-${msg.id}`}
           ref={(el) => { if (el) dateRefs.current.set(msg.date, el); }}
-          className="flex justify-center my-2"
+          className="flex justify-center my-3 sticky top-0 z-[5]"
         >
-          <span className="bg-[#1f2c34] text-[#8696a0] text-xs px-3 py-1 rounded-full shadow">
+          <span className="bg-[#182229] text-[#d1d7db] text-[11px] px-3 py-1.5 rounded-lg shadow-md">
             {formatDateLabel(msg.date)}
           </span>
         </div>
@@ -411,15 +393,6 @@ function ChatViewer({
 
   return (
     <div className="relative flex-1 overflow-hidden">
-      {/* Floating date tag — only visible while scrolling */}
-      {currentDate && isScrolling && (
-        <div
-          className="absolute top-2 left-1/2 -translate-x-1/2 z-10 bg-[#1f2c34] text-[#8696a0] text-xs px-3 py-1 rounded-full shadow transition-opacity duration-300"
-        >
-          {formatDateLabel(currentDate)}
-        </div>
-      )}
-
       {/* Scroll to bottom FAB */}
       {showScrollDown && (
         <button
