@@ -302,6 +302,7 @@ function ChatViewer({
   const handleScroll = () => {
     const el = containerRef.current;
     if (!el) return;
+    // Load more when near top
     if (el.scrollTop < 200 && visibleEnd < messages.length) {
       const prevScrollHeight = el.scrollHeight;
       setVisibleEnd((v) => Math.min(v + PAGE_SIZE, messages.length));
@@ -309,6 +310,38 @@ function ChatViewer({
         el.scrollTop += el.scrollHeight - prevScrollHeight;
       });
     }
+    // Determine the current visible date (first date separator visible near top)
+    updateCurrentDate();
+    // Show/hide scroll-to-bottom button
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    setShowScrollDown(distFromBottom > 300);
+  };
+
+  const [currentDate, setCurrentDate] = useState("");
+  const [showScrollDown, setShowScrollDown] = useState(false);
+
+  const updateCurrentDate = () => {
+    // Find which date separator is currently at or above the scroll position
+    const el = containerRef.current;
+    if (!el) return;
+    const scrollTop = el.scrollTop + 60; // offset for sticky date
+    let found = "";
+    dateRefs.current.forEach((ref, date) => {
+      if (ref.offsetTop <= scrollTop) {
+        found = date;
+      }
+    });
+    if (found && found !== currentDate) setCurrentDate(found);
+  };
+
+  const scrollToBottom = () => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const scrollToDateStart = () => {
+    if (!currentDate) return;
+    const el = dateRefs.current.get(currentDate);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const visible = messages.slice(Math.max(0, messages.length - visibleEnd));
@@ -378,13 +411,37 @@ function ChatViewer({
   }
 
   return (
-    <div
-      ref={containerRef}
-      onScroll={handleScroll}
-      className="flex-1 bg-[#0b141a] flex flex-col gap-1 p-4 overflow-y-auto"
-    >
-      {items}
-      <div ref={bottomRef} />
+    <div className="relative flex-1 overflow-hidden">
+      {/* Sticky floating date tag */}
+      {currentDate && (
+        <button
+          onClick={scrollToDateStart}
+          className="absolute top-2 left-1/2 -translate-x-1/2 z-10 bg-[#1f2c34] text-[#8696a0] text-xs px-3 py-1 rounded-full shadow hover:bg-[#2a3942] hover:text-white transition-colors cursor-pointer"
+        >
+          {formatDateLabel(currentDate)}
+        </button>
+      )}
+
+      {/* Scroll to bottom FAB */}
+      {showScrollDown && (
+        <button
+          onClick={scrollToBottom}
+          className="absolute bottom-4 right-4 z-10 w-10 h-10 rounded-full bg-[#00a884] hover:bg-[#02b698] shadow-lg flex items-center justify-center transition-colors"
+        >
+          <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+      )}
+
+      <div
+        ref={containerRef}
+        onScroll={handleScroll}
+        className="h-full bg-[#0b141a] flex flex-col gap-1 p-4 overflow-y-auto"
+      >
+        {items}
+        <div ref={bottomRef} />
+      </div>
     </div>
   );
 }
