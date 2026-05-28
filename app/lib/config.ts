@@ -11,19 +11,16 @@
  */
 
 const BASE =
-  "https://docs.google.com/spreadsheets/d/e/2PACX-1vTZvWm_5wh8yILpvbu0oN8oevvHLjLYO6z6V9LMK_yPSPIt5BV6E2Zik92AkxpCVyUsUueBIHRXsbtf/pub?output=csv";
-
-const BASE2 =
   "https://docs.google.com/spreadsheets/d/1peYTuefHYl9_ohMWsSuxV1y_smYD9HJ564RhjoEYn1Q/export?format=csv";
 
 export const SHEETS: { label: string; url: string }[] = [
   { label: "2019", url: `${BASE}&gid=0` },
   { label: "2020", url: `${BASE}&gid=1522915668` },
-  { label: "2021", url: `${BASE2}&gid=832201667` },
-  { label: "2022", url: `${BASE2}&gid=2116208670` },
-  { label: "2023", url: `${BASE2}&gid=1566113035` },
-  { label: "2024", url: `${BASE2}&gid=110535389` },
-  { label: "2025", url: `${BASE2}&gid=115047342` },
+  { label: "2021", url: `${BASE}&gid=832201667` },
+  { label: "2022", url: `${BASE}&gid=2116208670` },
+  { label: "2023", url: `${BASE}&gid=1566113035` },
+  { label: "2024", url: `${BASE}&gid=110535389` },
+  { label: "2025", url: `${BASE}&gid=115047342` },
 ];
 
 /** Name shown in the header bar */
