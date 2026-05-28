@@ -346,9 +346,13 @@ function ChatViewer({
         <div
           key={`sep-${msg.date}-${msg.id}`}
           ref={(el) => { if (el) dateRefs.current.set(msg.date, el); }}
-          className="flex justify-center my-3 sticky top-0 z-[5]"
+          className="flex justify-center my-3 sticky top-0 z-[5] cursor-pointer"
+          onClick={() => {
+            const el = dateRefs.current.get(msg.date);
+            if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+          }}
         >
-          <span className="bg-[#182229] text-[#d1d7db] text-[11px] px-3 py-1.5 rounded-lg shadow-md">
+          <span className="bg-[#182229] text-[#d1d7db] text-[11px] px-3 py-1.5 rounded-lg shadow-md hover:bg-[#2a3942] transition-colors">
             {formatDateLabel(msg.date)}
           </span>
         </div>
