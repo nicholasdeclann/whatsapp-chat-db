@@ -29,3 +29,6 @@ export const NAME_OVERRIDES: Record<string, string> = {
   "Nicholas Declan": "Peyaa 💜",
   "Vica 💙": "Pikachu 💙",
 };
+
+/** Google Drive folder ID for media files */
+export const MEDIA_FOLDER_ID = "1xRqf4NWE8cRr2FV95l9nguhsCbnvckZO";

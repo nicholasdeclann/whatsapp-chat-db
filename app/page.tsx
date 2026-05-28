@@ -4,6 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parseWhatsAppChat, ChatMessage } from "./lib/parseChat";
 import { SHEETS, CHAT_NAME, NAME_OVERRIDES } from "./lib/config";
 
+// Media detection regex — matches common WhatsApp media filenames
+const MEDIA_RE = /^(IMG-\d{8}-WA\d+\.(?:jpg|jpeg|png|gif|webp)|VID-\d{8}-WA\d+\.(?:mp4|3gp)|DOC-\d{8}-WA\d+\.\w+|STK-\d{8}-WA\d+\.webp|AUD-\d{8}-WA\d+\.(?:opus|mp3|m4a|ogg))$/i;
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -229,6 +232,7 @@ function ChatViewer({
   scrollToDate,
   scrollToMsgId,
   highlightMsgIds,
+  mediaMap,
   onScrollHandled,
 }: {
   messages: ChatMessage[];
@@ -237,6 +241,7 @@ function ChatViewer({
   scrollToDate: string | null;
   scrollToMsgId: number | null;
   highlightMsgIds: Set<number>;
+  mediaMap: Map<string, string>;
   onScrollHandled: () => void;
 }) {
   const [visibleEnd, setVisibleEnd] = useState(PAGE_SIZE);
@@ -346,13 +351,9 @@ function ChatViewer({
         <div
           key={`sep-${msg.date}-${msg.id}`}
           ref={(el) => { if (el) dateRefs.current.set(msg.date, el); }}
-          className="flex justify-center my-3 sticky top-0 z-[5] cursor-pointer"
-          onClick={() => {
-            const el = dateRefs.current.get(msg.date);
-            if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-          }}
+          className="flex justify-center my-3 sticky top-0 z-[5]"
         >
-          <span className="bg-[#182229] text-[#d1d7db] text-[11px] px-3 py-1.5 rounded-lg shadow-md hover:bg-[#2a3942] transition-colors">
+          <span className="bg-[#182229] text-[#d1d7db] text-[11px] px-3 py-1.5 rounded-lg shadow-md">
             {formatDateLabel(msg.date)}
           </span>
         </div>
@@ -386,9 +387,43 @@ function ChatViewer({
               <p className="text-[#8696a0] line-clamp-2 whitespace-pre-wrap">{msg.replyTo.text}</p>
             </div>
           )}
-          <p className="whitespace-pre-wrap leading-relaxed">
-            {renderTextWithLinks(msg.text, participants)}
-          </p>
+          {(() => {
+            const mediaMatch = msg.text.match(MEDIA_RE);
+            const fileId = mediaMatch ? mediaMap.get(mediaMatch[0]) : null;
+            if (fileId && /\.(jpg|jpeg|png|gif|webp)$/i.test(mediaMatch![0])) {
+              return (
+                <a href={`https://drive.google.com/file/d/${fileId}/view`} target="_blank" rel="noopener noreferrer">
+                  <img
+                    src={`https://drive.google.com/thumbnail?id=${fileId}&sz=w400`}
+                    alt={mediaMatch![0]}
+                    className="rounded-lg max-w-full max-h-64 object-contain my-1"
+                    loading="lazy"
+                  />
+                </a>
+              );
+            }
+            if (fileId && /\.(mp4|3gp)$/i.test(mediaMatch![0])) {
+              return (
+                <a href={`https://drive.google.com/file/d/${fileId}/view`} target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-[#53bdeb] underline text-xs my-1">
+                  🎬 {mediaMatch![0]}
+                </a>
+              );
+            }
+            if (fileId) {
+              return (
+                <a href={`https://drive.google.com/file/d/${fileId}/view`} target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-[#53bdeb] underline text-xs my-1">
+                  📎 {mediaMatch![0]}
+                </a>
+              );
+            }
+            return (
+              <p className="whitespace-pre-wrap leading-relaxed">
+                {renderTextWithLinks(msg.text, participants)}
+              </p>
+            );
+          })()}
           <p className="text-[#8696a0] text-[10px] text-right mt-1 -mb-0.5">{msg.timestamp}</p>
         </div>
       </div>
@@ -433,6 +468,7 @@ export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [participants, setParticipants] = useState<string[]>([]);
   const [perspective, setPerspective] = useState("");
+  const [mediaMap, setMediaMap] = useState<Map<string, string>>(new Map());
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [scrollToDate, setScrollToDate] = useState<string | null>(null);
   const [scrollToMsgId, setScrollToMsgId] = useState<number | null>(null);
@@ -506,17 +542,29 @@ export default function Home() {
         .filter(Boolean)
         .join("\n");
 
-    Promise.all(
-      SHEETS.map((sheet) =>
-        fetch(sheet.url)
-          .then((res) => {
-            if (!res.ok) throw new Error(`Failed to load ${sheet.label}: HTTP ${res.status}`);
-            return res.text();
-          })
-          .then(parseCSV)
-      )
-    )
-      .then((csvTexts) => {
+    Promise.all([
+      // Fetch chat sheets
+      Promise.all(
+        SHEETS.map((sheet) =>
+          fetch(sheet.url)
+            .then((res) => {
+              if (!res.ok) throw new Error(`Failed to load ${sheet.label}: HTTP ${res.status}`);
+              return res.text();
+            })
+            .then(parseCSV)
+        )
+      ),
+      // Fetch media folder listing from Google Apps Script
+      fetch("https://script.google.com/macros/s/AKfycbwIQ4g2d2RHi_yrJaKUswjy28BUuELiV29td5LegYp7zPKsa5TzWvnlXppqYpOsn3GQ_A/exec")
+        .then((res) => res.ok ? res.json() : {})
+        .then((data: Record<string, string>) => {
+          const map = new Map<string, string>();
+          for (const [name, id] of Object.entries(data)) map.set(name, id);
+          return map;
+        })
+        .catch(() => new Map<string, string>()),
+    ])
+      .then(([csvTexts, driveMediaMap]) => {
         const combined = csvTexts.join("\n");
         const { messages: msgs, participants: parts } = parseWhatsAppChat(combined);
 
@@ -540,6 +588,7 @@ export default function Home() {
         setMessages(msgs);
         setParticipants(renamedParts);
         setPerspective(renamedParts[0] ?? "");
+        setMediaMap(driveMediaMap);
         setLoadState("done");
       })
       .catch((err: Error) => {
@@ -695,6 +744,7 @@ export default function Home() {
           scrollToDate={scrollToDate}
           scrollToMsgId={scrollToMsgId}
           highlightMsgIds={new Set(searchResults)}
+          mediaMap={mediaMap}
           onScrollHandled={handleScrollHandled}
         />
       )}
