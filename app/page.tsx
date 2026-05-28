@@ -310,21 +310,26 @@ function ChatViewer({
         el.scrollTop += el.scrollHeight - prevScrollHeight;
       });
     }
-    // Determine the current visible date (first date separator visible near top)
+    // Determine the current visible date
     updateCurrentDate();
     // Show/hide scroll-to-bottom button
     const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     setShowScrollDown(distFromBottom > 300);
+    // Track scrolling state
+    setIsScrolling(true);
+    if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+    scrollTimeoutRef.current = setTimeout(() => setIsScrolling(false), 1500);
   };
 
   const [currentDate, setCurrentDate] = useState("");
   const [showScrollDown, setShowScrollDown] = useState(false);
+  const [isScrolling, setIsScrolling] = useState(false);
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const updateCurrentDate = () => {
-    // Find which date separator is currently at or above the scroll position
     const el = containerRef.current;
     if (!el) return;
-    const scrollTop = el.scrollTop + 60; // offset for sticky date
+    const scrollTop = el.scrollTop + 60;
     let found = "";
     dateRefs.current.forEach((ref, date) => {
       if (ref.offsetTop <= scrollTop) {
@@ -336,12 +341,6 @@ function ChatViewer({
 
   const scrollToBottom = () => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  const scrollToDateStart = () => {
-    if (!currentDate) return;
-    const el = dateRefs.current.get(currentDate);
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const visible = messages.slice(Math.max(0, messages.length - visibleEnd));
@@ -412,14 +411,13 @@ function ChatViewer({
 
   return (
     <div className="relative flex-1 overflow-hidden">
-      {/* Sticky floating date tag */}
-      {currentDate && (
-        <button
-          onClick={scrollToDateStart}
-          className="absolute top-2 left-1/2 -translate-x-1/2 z-10 bg-[#1f2c34] text-[#8696a0] text-xs px-3 py-1 rounded-full shadow hover:bg-[#2a3942] hover:text-white transition-colors cursor-pointer"
+      {/* Floating date tag — only visible while scrolling */}
+      {currentDate && isScrolling && (
+        <div
+          className="absolute top-2 left-1/2 -translate-x-1/2 z-10 bg-[#1f2c34] text-[#8696a0] text-xs px-3 py-1 rounded-full shadow transition-opacity duration-300"
         >
           {formatDateLabel(currentDate)}
-        </button>
+        </div>
       )}
 
       {/* Scroll to bottom FAB */}
