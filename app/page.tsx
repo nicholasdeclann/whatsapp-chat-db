@@ -271,6 +271,8 @@ function ChatViewer({
     const needed = messages.length - idx;
     if (needed > visibleEnd) {
       setVisibleEnd(Math.min(messages.length, needed + PAGE_SIZE));
+      // Return — the state update will re-trigger this effect
+      return;
     }
 
     // After render, scroll to the date separator
@@ -293,6 +295,7 @@ function ChatViewer({
     const needed = messages.length - idx;
     if (needed > visibleEnd) {
       setVisibleEnd(Math.min(messages.length, needed + PAGE_SIZE));
+      return;
     }
 
     requestAnimationFrame(() => {
