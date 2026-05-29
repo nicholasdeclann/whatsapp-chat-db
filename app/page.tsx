@@ -534,10 +534,22 @@ export default function Home() {
         .split("\n")
         .map((row) => {
           const trimmed = row.trim();
-          if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
-            return trimmed.slice(1, -1).replace(/""/g, '"');
+          // Extract first CSV column (may be quoted)
+          if (trimmed.startsWith('"')) {
+            // Find the closing quote that isn't followed by another quote
+            let i = 1;
+            let result = "";
+            while (i < trimmed.length) {
+              if (trimmed[i] === '"') {
+                if (trimmed[i + 1] === '"') { result += '"'; i += 2; }
+                else break;
+              } else { result += trimmed[i]; i++; }
+            }
+            return result;
           }
-          return trimmed;
+          // Unquoted: take everything before first comma (if any)
+          const commaIdx = trimmed.indexOf(",");
+          return commaIdx >= 0 ? trimmed.slice(0, commaIdx) : trimmed;
         })
         .filter(Boolean)
         .join("\n");
