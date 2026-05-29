@@ -223,7 +223,7 @@ function CalendarModal({
 // ChatViewer with windowed rendering for large chats
 // ---------------------------------------------------------------------------
 
-const PAGE_SIZE = 200;
+const PAGE_SIZE = 500;
 
 function ChatViewer({
   messages,
@@ -245,101 +245,72 @@ function ChatViewer({
   onScrollHandled: () => void;
 }) {
   const [visibleEnd, setVisibleEnd] = useState(PAGE_SIZE);
+  const [loadingMore, setLoadingMore] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const dateRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const msgRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
-  // Auto-scroll to bottom on initial load
+  // Reset when messages change (year switch)
   useEffect(() => {
-    setVisibleEnd(Math.min(messages.length, PAGE_SIZE));
+    dateRefs.current.clear();
+    msgRefs.current.clear();
+    setVisibleEnd(PAGE_SIZE);
+    // Scroll to bottom after render
+    setTimeout(() => {
+      bottomRef.current?.scrollIntoView({ behavior: "auto" });
+    }, 50);
   }, [messages]);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "auto" });
-  }, []);
-
-  // Scroll to a specific date when requested
-  const pendingScrollDate = useRef<string | null>(null);
-
+  // Scroll to a specific date
   useEffect(() => {
     if (!scrollToDate) return;
-
     const idx = messages.findIndex((m) => m.date >= scrollToDate);
     if (idx === -1) { onScrollHandled(); return; }
-
     const targetDate = messages[idx].date;
+    // Make sure enough messages are visible
     const needed = messages.length - idx;
-
-    pendingScrollDate.current = targetDate;
-
     if (needed > visibleEnd) {
       setVisibleEnd(Math.min(messages.length, needed + PAGE_SIZE));
-    } else {
-      // Already loaded, scroll now
-      doScrollToDate(targetDate);
     }
-  }, [scrollToDate]);
-
-  // When visibleEnd changes and we have a pending scroll
-  useEffect(() => {
-    if (pendingScrollDate.current) {
-      doScrollToDate(pendingScrollDate.current);
-    }
-  }, [visibleEnd]);
-
-  const doScrollToDate = (targetDate: string) => {
-    // Keep retrying until the element exists (max 2s)
-    let attempts = 0;
-    const interval = setInterval(() => {
+    setTimeout(() => {
       const el = dateRefs.current.get(targetDate);
-      const container = containerRef.current;
-      if (el && container) {
-        container.scrollTop = el.offsetTop - container.offsetTop;
-        pendingScrollDate.current = null;
-        onScrollHandled();
-        clearInterval(interval);
+      if (el && containerRef.current) {
+        containerRef.current.scrollTop = el.offsetTop - containerRef.current.offsetTop;
       }
-      if (++attempts > 20) {
-        pendingScrollDate.current = null;
-        onScrollHandled();
-        clearInterval(interval);
-      }
+      onScrollHandled();
     }, 100);
-  };
+  }, [scrollToDate, visibleEnd]);
 
   // Scroll to a specific message by id
   useEffect(() => {
     if (!scrollToMsgId) return;
-
     const idx = messages.findIndex((m) => m.id === scrollToMsgId);
     if (idx === -1) { onScrollHandled(); return; }
-
     const needed = messages.length - idx;
     if (needed > visibleEnd) {
       setVisibleEnd(Math.min(messages.length, needed + PAGE_SIZE));
-      return;
     }
-
-    requestAnimationFrame(() => {
+    setTimeout(() => {
       const el = msgRefs.current.get(scrollToMsgId);
-      if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (el && containerRef.current) {
+        containerRef.current.scrollTop = el.offsetTop - containerRef.current.offsetTop - containerRef.current.clientHeight / 2;
       }
       onScrollHandled();
-    });
-  }, [scrollToMsgId, messages, visibleEnd, onScrollHandled]);
-
-  const [loadingMore, setLoadingMore] = useState(false);
+    }, 100);
+  }, [scrollToMsgId, visibleEnd]);
 
   const handleScroll = () => {
     const el = containerRef.current;
     if (!el) return;
-    // Determine the current visible date
-    updateCurrentDate();
-    // Show/hide scroll-to-bottom button
     const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     setShowScrollDown(distFromBottom > 300);
+  };
+
+  const [showScrollDown, setShowScrollDown] = useState(false);
+
+  const scrollToBottom = () => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   const loadOlderMessages = () => {
@@ -355,14 +326,6 @@ function ChatViewer({
         });
       }
     }, 300);
-  };
-
-  const [showScrollDown, setShowScrollDown] = useState(false);
-
-  const updateCurrentDate = () => {};
-
-  const scrollToBottom = () => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   const visible = messages.slice(Math.max(0, messages.length - visibleEnd));
@@ -522,6 +485,7 @@ export default function Home() {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [scrollToDate, setScrollToDate] = useState<string | null>(null);
   const [scrollToMsgId, setScrollToMsgId] = useState<number | null>(null);
+  const [selectedYear, setSelectedYear] = useState<string>("");
 
   // Search state
   const [searchOpen, setSearchOpen] = useState(false);
@@ -531,11 +495,17 @@ export default function Home() {
 
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Derive set of dates that have chats
-  const datesWithChats = useMemo(
-    () => new Set(messages.map((m) => m.date)),
-    [messages]
-  );
+  // Derive available years and filtered messages
+  const years = useMemo(() => {
+    const yrs = new Set<string>();
+    messages.forEach((m) => yrs.add(m.date.slice(0, 4)));
+    return [...yrs].sort();
+  }, [messages]);
+
+  const filteredMessages = useMemo(() => {
+    if (!selectedYear) return messages;
+    return messages.filter((m) => m.date.startsWith(selectedYear));
+  }, [messages, selectedYear]);
 
   const handleScrollHandled = useCallback(() => {
     setScrollToDate(null);
@@ -557,22 +527,40 @@ export default function Home() {
     setSearchQuery(query);
     if (!query.trim()) { setSearchResults([]); setSearchIndex(0); return; }
     const q = query.toLowerCase();
+    // Search across ALL messages, not just filtered
     const results = messages.filter((m) => m.text.toLowerCase().includes(q)).map((m) => m.id);
     setSearchResults(results);
     const lastIdx = results.length - 1;
     setSearchIndex(Math.max(0, lastIdx));
-    if (results.length > 0) setScrollToMsgId(results[lastIdx]);
+    if (results.length > 0) {
+      const msg = messages.find((m) => m.id === results[lastIdx]);
+      if (msg) {
+        const yr = msg.date.slice(0, 4);
+        if (yr !== selectedYear) setSelectedYear(yr);
+      }
+      setScrollToMsgId(results[lastIdx]);
+    }
   };
   const searchPrev = () => {
     if (searchResults.length === 0) return;
     const newIdx = searchIndex > 0 ? searchIndex - 1 : searchResults.length - 1;
     setSearchIndex(newIdx);
+    const msg = messages.find((m) => m.id === searchResults[newIdx]);
+    if (msg) {
+      const yr = msg.date.slice(0, 4);
+      if (yr !== selectedYear) setSelectedYear(yr);
+    }
     setScrollToMsgId(searchResults[newIdx]);
   };
   const searchNext = () => {
     if (searchResults.length === 0) return;
     const newIdx = searchIndex < searchResults.length - 1 ? searchIndex + 1 : 0;
     setSearchIndex(newIdx);
+    const msg = messages.find((m) => m.id === searchResults[newIdx]);
+    if (msg) {
+      const yr = msg.date.slice(0, 4);
+      if (yr !== selectedYear) setSelectedYear(yr);
+    }
     setScrollToMsgId(searchResults[newIdx]);
   };
 
@@ -651,6 +639,9 @@ export default function Home() {
         setParticipants(renamedParts);
         setPerspective(renamedParts[0] ?? "");
         setMediaMap(driveMediaMap);
+        // Default to latest year
+        const yrs = [...new Set(msgs.map((m) => m.date.slice(0, 4)))].sort();
+        setSelectedYear(yrs[yrs.length - 1] ?? "");
         setLoadState("done");
       })
       .catch((err: Error) => {
@@ -707,7 +698,7 @@ export default function Home() {
                 <p className="text-white text-sm font-semibold leading-tight">{CHAT_NAME}</p>
                 {loadState === "done" && (
                   <p className="text-[#8696a0] text-xs">
-                    {messages.length.toLocaleString()} messages
+                    {filteredMessages.length.toLocaleString()} messages in {selectedYear}
                   </p>
                 )}
               </div>
@@ -766,8 +757,12 @@ export default function Home() {
       <CalendarModal
         open={calendarOpen}
         onClose={() => setCalendarOpen(false)}
-        datesWithChats={datesWithChats}
-        onSelectDate={setScrollToDate}
+        datesWithChats={new Set(messages.map((m) => m.date))}
+        onSelectDate={(date) => {
+          const yr = date.slice(0, 4);
+          if (yr !== selectedYear) setSelectedYear(yr);
+          setScrollToDate(date);
+        }}
       />
 
       {/* Body */}
@@ -799,16 +794,36 @@ export default function Home() {
       )}
 
       {loadState === "done" && (
-        <ChatViewer
-          messages={messages}
-          participants={participants}
-          perspective={perspective}
-          scrollToDate={scrollToDate}
-          scrollToMsgId={scrollToMsgId}
-          highlightMsgIds={new Set(searchResults)}
-          mediaMap={mediaMap}
-          onScrollHandled={handleScrollHandled}
-        />
+        <div className="flex flex-1 overflow-hidden">
+          {/* Year sidebar */}
+          <aside className="w-16 shrink-0 bg-[#111b21] border-r border-[#2a3942] flex flex-col items-center py-3 gap-1 overflow-y-auto">
+            {years.map((yr) => (
+              <button
+                key={yr}
+                onClick={() => setSelectedYear(yr)}
+                className={`w-12 py-2 rounded-lg text-xs font-semibold transition-colors ${
+                  yr === selectedYear
+                    ? "bg-[#00a884] text-white"
+                    : "text-[#8696a0] hover:bg-[#2a3942] hover:text-white"
+                }`}
+              >
+                {yr}
+              </button>
+            ))}
+          </aside>
+
+          {/* Chat area */}
+          <ChatViewer
+            messages={filteredMessages}
+            participants={participants}
+            perspective={perspective}
+            scrollToDate={scrollToDate}
+            scrollToMsgId={scrollToMsgId}
+            highlightMsgIds={new Set(searchResults)}
+            mediaMap={mediaMap}
+            onScrollHandled={handleScrollHandled}
+          />
+        </div>
       )}
     </div>
   );
