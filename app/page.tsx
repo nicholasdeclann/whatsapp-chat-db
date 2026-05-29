@@ -4,8 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parseWhatsAppChat, ChatMessage } from "./lib/parseChat";
 import { SHEETS, CHAT_NAME, NAME_OVERRIDES } from "./lib/config";
 
-// Media detection regex — matches common WhatsApp media filenames
-const MEDIA_RE = /^(IMG-\d{8}-WA\d+\.(?:jpg|jpeg|png|gif|webp)|VID-\d{8}-WA\d+\.(?:mp4|3gp)|DOC-\d{8}-WA\d+\.\w+|STK-\d{8}-WA\d+\.webp|AUD-\d{8}-WA\d+\.(?:opus|mp3|m4a|ogg))$/i;
+// Media detection regex — matches common WhatsApp media filenames (at start of message, possibly followed by text)
+const MEDIA_RE = /^(IMG-\d{8}-WA\d+\.(?:jpg|jpeg|png|gif|webp)|VID-\d{8}-WA\d+\.(?:mp4|3gp)|DOC-\d{8}-WA\d+\.\w+|STK-\d{8}-WA\d+\.webp|AUD-\d{8}-WA\d+\.(?:opus|mp3|m4a|ogg))(?:\s+([\s\S]*))?$/i;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -403,33 +403,56 @@ function ChatViewer({
           )}
           {(() => {
             const mediaMatch = msg.text.match(MEDIA_RE);
-            const fileId = mediaMatch ? mediaMap.get(mediaMatch[0]) : null;
-            if (fileId && /\.(jpg|jpeg|png|gif|webp)$/i.test(mediaMatch![0])) {
+            const filename = mediaMatch ? mediaMatch[1] : null;
+            const captionText = mediaMatch ? (mediaMatch[2] || "").trim() : "";
+            const fileId = filename ? mediaMap.get(filename) : null;
+            if (fileId && /\.(jpg|jpeg|png|gif|webp)$/i.test(filename!)) {
               return (
-                <a href={`https://drive.google.com/file/d/${fileId}/view`} target="_blank" rel="noopener noreferrer">
-                  <img
-                    src={`https://drive.google.com/thumbnail?id=${fileId}&sz=w400`}
-                    alt={mediaMatch![0]}
-                    className="rounded-lg max-w-full max-h-64 object-contain my-1"
-                    loading="lazy"
-                  />
-                </a>
+                <>
+                  <a href={`https://drive.google.com/file/d/${fileId}/view`} target="_blank" rel="noopener noreferrer">
+                    <img
+                      src={`https://drive.google.com/thumbnail?id=${fileId}&sz=w400`}
+                      alt={filename!}
+                      className="rounded-lg max-w-full max-h-64 object-contain my-1"
+                      loading="lazy"
+                    />
+                  </a>
+                  {captionText && (
+                    <p className="whitespace-pre-wrap leading-relaxed mt-1">
+                      {renderTextWithLinks(captionText, participants)}
+                    </p>
+                  )}
+                </>
               );
             }
-            if (fileId && /\.(mp4|3gp)$/i.test(mediaMatch![0])) {
+            if (fileId && /\.(mp4|3gp)$/i.test(filename!)) {
               return (
-                <a href={`https://drive.google.com/file/d/${fileId}/view`} target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-[#53bdeb] underline text-xs my-1">
-                  🎬 {mediaMatch![0]}
-                </a>
+                <>
+                  <a href={`https://drive.google.com/file/d/${fileId}/view`} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-[#53bdeb] underline text-xs my-1">
+                    🎬 {filename}
+                  </a>
+                  {captionText && (
+                    <p className="whitespace-pre-wrap leading-relaxed mt-1">
+                      {renderTextWithLinks(captionText, participants)}
+                    </p>
+                  )}
+                </>
               );
             }
             if (fileId) {
               return (
-                <a href={`https://drive.google.com/file/d/${fileId}/view`} target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-[#53bdeb] underline text-xs my-1">
-                  📎 {mediaMatch![0]}
-                </a>
+                <>
+                  <a href={`https://drive.google.com/file/d/${fileId}/view`} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-[#53bdeb] underline text-xs my-1">
+                    📎 {filename}
+                  </a>
+                  {captionText && (
+                    <p className="whitespace-pre-wrap leading-relaxed mt-1">
+                      {renderTextWithLinks(captionText, participants)}
+                    </p>
+                  )}
+                </>
               );
             }
             return (
