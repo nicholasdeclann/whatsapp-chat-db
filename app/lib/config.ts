@@ -11,7 +11,7 @@
  */
 
 const BASE =
-  "https://docs.google.com/spreadsheets/d/1peYTuefHYl9_ohMWsSuxV1y_smYD9HJ564RhjoEYn1Q/export?format=csv";
+  "https://docs.google.com/spreadsheets/d/e/2PACX-1vTZvWm_5wh8yILpvbu0oN8oevvHLjLYO6z6V9LMK_yPSPIt5BV6E2Zik92AkxpCVyUsUueBIHRXsbtf/pub?output=csv";
 
 export const SHEETS: { label: string; url: string }[] = [
   { label: "2019", url: `${BASE}&gid=0` },
