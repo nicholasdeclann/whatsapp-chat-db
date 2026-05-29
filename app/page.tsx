@@ -260,29 +260,48 @@ function ChatViewer({
   }, []);
 
   // Scroll to a specific date when requested
+  const pendingScrollDate = useRef<string | null>(null);
+
   useEffect(() => {
     if (!scrollToDate) return;
 
-    // Find the first message index on or after this date
     const idx = messages.findIndex((m) => m.date >= scrollToDate);
     if (idx === -1) { onScrollHandled(); return; }
 
-    // Ensure enough messages are loaded to include this date
+    const targetDate = messages[idx].date;
+
+    // Ensure enough messages are loaded
     const needed = messages.length - idx;
     if (needed > visibleEnd) {
+      pendingScrollDate.current = targetDate;
       setVisibleEnd(Math.min(messages.length, needed + PAGE_SIZE));
       return;
     }
 
-    // Snap instantly to the date separator
+    // Try to scroll now
+    pendingScrollDate.current = targetDate;
+    tryScrollToDate();
+  }, [scrollToDate, messages, visibleEnd, onScrollHandled]);
+
+  // Retry scrolling after render when visibleEnd changes
+  useEffect(() => {
+    if (!pendingScrollDate.current) return;
+    tryScrollToDate();
+  }, [visibleEnd]);
+
+  const tryScrollToDate = () => {
+    const target = pendingScrollDate.current;
+    if (!target) return;
+    // Use a longer delay to allow DOM to update after large visibleEnd changes
     setTimeout(() => {
-      const el = dateRefs.current.get(scrollToDate);
+      const el = dateRefs.current.get(target);
       if (el) {
         el.scrollIntoView({ behavior: "auto", block: "start" });
+        pendingScrollDate.current = null;
+        onScrollHandled();
       }
-      onScrollHandled();
-    }, 50);
-  }, [scrollToDate, messages, visibleEnd, onScrollHandled]);
+    }, 200);
+  };
 
   // Scroll to a specific message by id
   useEffect(() => {
