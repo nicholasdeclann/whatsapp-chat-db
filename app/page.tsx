@@ -269,38 +269,43 @@ function ChatViewer({
     if (idx === -1) { onScrollHandled(); return; }
 
     const targetDate = messages[idx].date;
-
-    // Ensure enough messages are loaded
     const needed = messages.length - idx;
-    if (needed > visibleEnd) {
-      pendingScrollDate.current = targetDate;
-      setVisibleEnd(Math.min(messages.length, needed + PAGE_SIZE));
-      return;
-    }
 
-    // Try to scroll now
     pendingScrollDate.current = targetDate;
-    tryScrollToDate();
-  }, [scrollToDate, messages, visibleEnd, onScrollHandled]);
 
-  // Retry scrolling after render when visibleEnd changes
+    if (needed > visibleEnd) {
+      setVisibleEnd(Math.min(messages.length, needed + PAGE_SIZE));
+    } else {
+      // Already loaded, scroll now
+      doScrollToDate(targetDate);
+    }
+  }, [scrollToDate]);
+
+  // When visibleEnd changes and we have a pending scroll
   useEffect(() => {
-    if (!pendingScrollDate.current) return;
-    tryScrollToDate();
+    if (pendingScrollDate.current) {
+      doScrollToDate(pendingScrollDate.current);
+    }
   }, [visibleEnd]);
 
-  const tryScrollToDate = () => {
-    const target = pendingScrollDate.current;
-    if (!target) return;
-    // Use a longer delay to allow DOM to update after large visibleEnd changes
-    setTimeout(() => {
-      const el = dateRefs.current.get(target);
-      if (el) {
-        el.scrollIntoView({ behavior: "auto", block: "start" });
+  const doScrollToDate = (targetDate: string) => {
+    // Keep retrying until the element exists (max 2s)
+    let attempts = 0;
+    const interval = setInterval(() => {
+      const el = dateRefs.current.get(targetDate);
+      const container = containerRef.current;
+      if (el && container) {
+        container.scrollTop = el.offsetTop - container.offsetTop;
         pendingScrollDate.current = null;
         onScrollHandled();
+        clearInterval(interval);
       }
-    }, 200);
+      if (++attempts > 20) {
+        pendingScrollDate.current = null;
+        onScrollHandled();
+        clearInterval(interval);
+      }
+    }, 100);
   };
 
   // Scroll to a specific message by id
