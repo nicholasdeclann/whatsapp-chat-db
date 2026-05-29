@@ -82,6 +82,7 @@ function formatDateLabel(isoDate: string): string {
 }
 
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const MONTH_NAMES_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const DAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
 // ---------------------------------------------------------------------------
@@ -507,6 +508,13 @@ export default function Home() {
     return messages.filter((m) => m.date.startsWith(selectedYear));
   }, [messages, selectedYear]);
 
+  // Months with chats for selected year
+  const monthsWithChats = useMemo(() => {
+    const months = new Set<string>();
+    filteredMessages.forEach((m) => months.add(m.date.slice(5, 7)));
+    return [...months].sort();
+  }, [filteredMessages]);
+
   const handleScrollHandled = useCallback(() => {
     setScrollToDate(null);
     setScrollToMsgId(null);
@@ -811,6 +819,21 @@ export default function Home() {
               </button>
             ))}
           </aside>
+
+          {/* Month sidebar */}
+          {selectedYear && monthsWithChats.length > 0 && (
+            <aside className="w-14 shrink-0 bg-[#0b141a] border-r border-[#2a3942] flex flex-col items-center py-3 gap-1 overflow-y-auto">
+              {monthsWithChats.map((mo) => (
+                <button
+                  key={mo}
+                  onClick={() => setScrollToDate(`${selectedYear}-${mo}-01`)}
+                  className="w-11 py-1.5 rounded-lg text-[11px] font-medium text-[#8696a0] hover:bg-[#2a3942] hover:text-white transition-colors"
+                >
+                  {MONTH_NAMES_SHORT[parseInt(mo, 10) - 1]}
+                </button>
+              ))}
+            </aside>
+          )}
 
           {/* Chat area */}
           <ChatViewer
