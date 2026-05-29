@@ -385,7 +385,7 @@ function ChatViewer({
         ref={(el) => { if (el) msgRefs.current.set(msg.id, el); }}
         className={`flex ${isMe ? "justify-end" : "justify-start"}`}
       >
-        <div className={`relative max-w-[75%] px-3 py-2 rounded-2xl text-sm shadow-md ${
+        <div className={`relative max-w-[75%] px-3 py-2 rounded-2xl text-sm shadow-md break-all ${
           isHighlighted
             ? "bg-[#5e4b00] text-white rounded-br-sm rounded-bl-sm"
             : isMe ? "bg-[#005c4b] text-white rounded-br-sm" : "bg-[#1f2c34] text-white rounded-bl-sm"
