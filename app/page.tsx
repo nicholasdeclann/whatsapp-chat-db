@@ -428,10 +428,12 @@ function ChatViewer({
             if (fileId && /\.(mp4|3gp)$/i.test(filename!)) {
               return (
                 <>
-                  <a href={`https://drive.google.com/file/d/${fileId}/view`} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-[#53bdeb] underline text-xs my-1">
-                    🎬 {filename}
-                  </a>
+                  <video
+                    src={`https://drive.google.com/uc?export=download&id=${fileId}`}
+                    controls
+                    preload="metadata"
+                    className="rounded-lg max-w-full max-h-64 my-1"
+                  />
                   {captionText && (
                     <p className="whitespace-pre-wrap leading-relaxed mt-1">
                       {renderTextWithLinks(captionText, participants)}
