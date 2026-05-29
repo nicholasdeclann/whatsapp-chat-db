@@ -271,18 +271,17 @@ function ChatViewer({
     const needed = messages.length - idx;
     if (needed > visibleEnd) {
       setVisibleEnd(Math.min(messages.length, needed + PAGE_SIZE));
-      // Return — the state update will re-trigger this effect
       return;
     }
 
-    // After render, scroll to the date separator
-    requestAnimationFrame(() => {
+    // Snap instantly to the date separator
+    setTimeout(() => {
       const el = dateRefs.current.get(scrollToDate);
       if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "start" });
+        el.scrollIntoView({ behavior: "auto", block: "start" });
       }
       onScrollHandled();
-    });
+    }, 50);
   }, [scrollToDate, messages, visibleEnd, onScrollHandled]);
 
   // Scroll to a specific message by id
