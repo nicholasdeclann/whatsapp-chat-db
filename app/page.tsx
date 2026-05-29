@@ -330,22 +330,31 @@ function ChatViewer({
     });
   }, [scrollToMsgId, messages, visibleEnd, onScrollHandled]);
 
+  const [loadingMore, setLoadingMore] = useState(false);
+
   const handleScroll = () => {
     const el = containerRef.current;
     if (!el) return;
-    // Load more when near top
-    if (el.scrollTop < 200 && visibleEnd < messages.length) {
-      const prevScrollHeight = el.scrollHeight;
-      setVisibleEnd((v) => Math.min(v + PAGE_SIZE, messages.length));
-      requestAnimationFrame(() => {
-        el.scrollTop += el.scrollHeight - prevScrollHeight;
-      });
-    }
     // Determine the current visible date
     updateCurrentDate();
     // Show/hide scroll-to-bottom button
     const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     setShowScrollDown(distFromBottom > 300);
+  };
+
+  const loadOlderMessages = () => {
+    setLoadingMore(true);
+    const el = containerRef.current;
+    const prevScrollHeight = el?.scrollHeight ?? 0;
+    setTimeout(() => {
+      setVisibleEnd((v) => Math.min(v + PAGE_SIZE, messages.length));
+      setLoadingMore(false);
+      if (el) {
+        requestAnimationFrame(() => {
+          el.scrollTop += el.scrollHeight - prevScrollHeight;
+        });
+      }
+    }, 300);
   };
 
   const [showScrollDown, setShowScrollDown] = useState(false);
@@ -363,8 +372,23 @@ function ChatViewer({
 
   if (messages.length > visibleEnd) {
     items.push(
-      <div key="load-more" className="flex justify-center my-2">
-        <span className="text-[#8696a0] text-xs">Scroll up to load older messages</span>
+      <div key="load-more" className="flex justify-center my-3">
+        {loadingMore ? (
+          <div className="flex items-center gap-2">
+            <svg className="w-4 h-4 animate-spin text-[#00a884]" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+            </svg>
+            <span className="text-[#8696a0] text-xs">Loading older messages…</span>
+          </div>
+        ) : (
+          <button
+            onClick={loadOlderMessages}
+            className="bg-[#1f2c34] text-[#00a884] text-xs font-medium px-4 py-2 rounded-full border border-[#2a3942] hover:bg-[#2a3942] transition-colors"
+          >
+            Load older messages
+          </button>
+        )}
       </div>
     );
   }
