@@ -487,6 +487,7 @@ export default function Home() {
   const [scrollToDate, setScrollToDate] = useState<string | null>(null);
   const [scrollToMsgId, setScrollToMsgId] = useState<number | null>(null);
   const [selectedYear, setSelectedYear] = useState<string>("");
+  const [selectedMonth, setSelectedMonth] = useState<string>("");
 
   // Search state
   const [searchOpen, setSearchOpen] = useState(false);
@@ -505,15 +506,22 @@ export default function Home() {
 
   const filteredMessages = useMemo(() => {
     if (!selectedYear) return messages;
+    if (selectedMonth) {
+      const prefix = `${selectedYear}-${selectedMonth}`;
+      return messages.filter((m) => m.date.startsWith(prefix));
+    }
     return messages.filter((m) => m.date.startsWith(selectedYear));
-  }, [messages, selectedYear]);
+  }, [messages, selectedYear, selectedMonth]);
 
   // Months with chats for selected year
   const monthsWithChats = useMemo(() => {
+    if (!selectedYear) return [];
     const months = new Set<string>();
-    filteredMessages.forEach((m) => months.add(m.date.slice(5, 7)));
+    messages.forEach((m) => {
+      if (m.date.startsWith(selectedYear)) months.add(m.date.slice(5, 7));
+    });
     return [...months].sort();
-  }, [filteredMessages]);
+  }, [messages, selectedYear]);
 
   const handleScrollHandled = useCallback(() => {
     setScrollToDate(null);
@@ -544,7 +552,9 @@ export default function Home() {
       const msg = messages.find((m) => m.id === results[lastIdx]);
       if (msg) {
         const yr = msg.date.slice(0, 4);
+        const mo = msg.date.slice(5, 7);
         if (yr !== selectedYear) setSelectedYear(yr);
+        setSelectedMonth(mo);
       }
       setScrollToMsgId(results[lastIdx]);
     }
@@ -556,7 +566,9 @@ export default function Home() {
     const msg = messages.find((m) => m.id === searchResults[newIdx]);
     if (msg) {
       const yr = msg.date.slice(0, 4);
+      const mo = msg.date.slice(5, 7);
       if (yr !== selectedYear) setSelectedYear(yr);
+      setSelectedMonth(mo);
     }
     setScrollToMsgId(searchResults[newIdx]);
   };
@@ -567,7 +579,9 @@ export default function Home() {
     const msg = messages.find((m) => m.id === searchResults[newIdx]);
     if (msg) {
       const yr = msg.date.slice(0, 4);
+      const mo = msg.date.slice(5, 7);
       if (yr !== selectedYear) setSelectedYear(yr);
+      setSelectedMonth(mo);
     }
     setScrollToMsgId(searchResults[newIdx]);
   };
@@ -706,7 +720,7 @@ export default function Home() {
                 <p className="text-white text-sm font-semibold leading-tight">{CHAT_NAME}</p>
                 {loadState === "done" && (
                   <p className="text-[#8696a0] text-xs">
-                    {filteredMessages.length.toLocaleString()} messages in {selectedYear}
+                    {filteredMessages.length.toLocaleString()} messages in {selectedMonth ? `${MONTH_NAMES_SHORT[parseInt(selectedMonth, 10) - 1]} ${selectedYear}` : selectedYear}
                   </p>
                 )}
               </div>
@@ -768,7 +782,9 @@ export default function Home() {
         datesWithChats={new Set(messages.map((m) => m.date))}
         onSelectDate={(date) => {
           const yr = date.slice(0, 4);
+          const mo = date.slice(5, 7);
           if (yr !== selectedYear) setSelectedYear(yr);
+          setSelectedMonth(mo);
           setScrollToDate(date);
         }}
       />
@@ -808,7 +824,7 @@ export default function Home() {
             {years.map((yr) => (
               <button
                 key={yr}
-                onClick={() => setSelectedYear(yr)}
+                onClick={() => { setSelectedYear(yr); setSelectedMonth(""); }}
                 className={`w-12 py-2 rounded-lg text-xs font-semibold transition-colors ${
                   yr === selectedYear
                     ? "bg-[#00a884] text-white"
@@ -826,8 +842,12 @@ export default function Home() {
               {monthsWithChats.map((mo) => (
                 <button
                   key={mo}
-                  onClick={() => setScrollToDate(`${selectedYear}-${mo}-01`)}
-                  className="w-11 py-1.5 rounded-lg text-[11px] font-medium text-[#8696a0] hover:bg-[#2a3942] hover:text-white transition-colors"
+                  onClick={() => setSelectedMonth(mo)}
+                  className={`w-11 py-1.5 rounded-lg text-[11px] font-medium transition-colors ${
+                    mo === selectedMonth
+                      ? "bg-[#00a884] text-white"
+                      : "text-[#8696a0] hover:bg-[#2a3942] hover:text-white"
+                  }`}
                 >
                   {MONTH_NAMES_SHORT[parseInt(mo, 10) - 1]}
                 </button>
